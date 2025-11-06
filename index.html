@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GitHub File System</title>
+    <link rel="stylesheet" href="styles.css">
+    <!-- Load compression libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/fflate@0.8.1/umd/index.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎮 GitHub File Storage Hub</h1>
+            <p class="subtitle">Upload any file type - games, zips, images, executables, ISO, APK, EXE - up to 50GB</p>
+            <button id="darkModeToggle" class="dark-mode-btn">🌙 Dark Mode</button>
+        </header>
+
+        <nav class="tabs">
+            <button class="tab-btn active" data-tab="upload">Upload</button>
+            <button class="tab-btn" data-tab="files">Files</button>
+            <button class="tab-btn" data-tab="data">Data</button>
+            <button class="tab-btn" data-tab="settings">Settings</button>
+        </nav>
+
+        <!-- UPLOAD TAB -->
+        <section id="upload" class="tab-content active">
+            <div class="card">
+                <h2>Upload Any File Type</h2>
+                <p class="info-text">Supports: Games, ZIP/RAR, ISO, APK, EXE, Videos, Images, Documents, and more</p>
+
+                <div class="upload-area" id="uploadArea">
+                    <div class="upload-icon">📤</div>
+                    <p>Drag and drop any file here</p>
+                    <p class="or-text">or</p>
+                    <input type="file" id="fileInput" hidden>
+                    <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">Choose File</button>
+                </div>
+
+                <div id="fileInfo" class="file-info" style="display: none;">
+                    <h3>Selected File</h3>
+                    <div class="file-details-grid">
+                        <div class="detail-item">
+                            <label>Name:</label>
+                            <span id="fileName"></span>
+                        </div>
+                        <div class="detail-item">
+                            <label>Size:</label>
+                            <span id="fileSize"></span>
+                        </div>
+                        <div class="detail-item">
+                            <label>Type:</label>
+                            <span id="fileType"></span>
+                        </div>
+                        <div class="detail-item">
+                            <label>Category:</label>
+                            <span id="fileCategory" class="category-badge"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="progressSection" class="progress-section" style="display: none;">
+                    <h3>Upload Progress</h3>
+                    <div class="progress-item">
+                        <label>Compression:</label>
+                        <div class="progress-bar">
+                            <div id="compressionProgress" class="progress-fill"></div>
+                        </div>
+                        <span id="compressionText" class="progress-text">0%</span>
+                    </div>
+                    <div class="progress-item">
+                        <label>Chunking:</label>
+                        <div class="progress-bar">
+                            <div id="chunkingProgress" class="progress-fill"></div>
+                        </div>
+                        <span id="chunkingText" class="progress-text">0%</span>
+                    </div>
+                    <div class="progress-item">
+                        <label>Upload:</label>
+                        <div class="progress-bar">
+                            <div id="uploadProgress" class="progress-fill"></div>
+                        </div>
+                        <span id="uploadText" class="progress-text">0%</span>
+                    </div>
+                </div>
+
+                <div id="uploadLog" class="log-section" style="display: none;">
+                    <h3>Upload Log</h3>
+                    <div id="logContent" class="log-content"></div>
+                </div>
+
+                <div id="statusMessage" class="status-message" style="display: none;"></div>
+
+                <button id="uploadBtn" class="btn btn-success" style="display: none;">Upload File</button>
+            </div>
+        </section>
+
+        <!-- FILES TAB -->
+        <section id="files" class="tab-content">
+            <div class="card">
+                <h2>Your Files</h2>
+
+                <div class="filter-section">
+                    <input type="text" id="searchInput" placeholder="Search files..." class="search-box">
+                    <select id="categoryFilter" class="category-select">
+                        <option value="">All Categories</option>
+                        <option value="game">Games</option>
+                        <option value="archive">Archives (ZIP/RAR)</option>
+                        <option value="video">Videos</option>
+                        <option value="image">Images</option>
+                        <option value="document">Documents</option>
+                        <option value="executable">Executables</option>
+                        <option value="iso">ISO</option>
+                        <option value="apk">APK</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+
+                <div id="filesList" class="files-list">
+                    <p class="empty-state">No files uploaded yet</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- DATA TAB -->
+        <section id="data" class="tab-content">
+            <div class="card">
+                <h2>Data & Repository</h2>
+
+                <div class="data-section">
+                    <h3>📋 File Registry (data.json)</h3>
+                    <p class="data-desc">Complete inventory of all uploaded files stored in your repository.</p>
+                    <button class="btn btn-primary" onclick="viewDataJson()">View Registry</button>
+                    <button class="btn btn-secondary" onclick="downloadDataJson()">Download Registry</button>
+                    <button class="btn btn-secondary" onclick="syncDataJson()">Sync from GitHub</button>
+                    <div id="dataJsonView" class="json-viewer" style="display: none; margin-top: 20px;">
+                        <h4>data.json Content:</h4>
+                        <pre id="dataJsonContent"></pre>
+                    </div>
+                </div>
+
+                <div class="data-section" style="margin-top: 30px;">
+                    <h3>📊 Statistics by File Type</h3>
+                    <div id="statsContainer" class="stats-grid">
+                        <p>Loading statistics...</p>
+                    </div>
+                </div>
+
+                <div class="data-section" style="margin-top: 30px;">
+                    <h3>🔍 Storage Info</h3>
+                    <div id="storageInfo" class="info-box">
+                        <p>Loading storage information...</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SETTINGS TAB -->
+        <section id="settings" class="tab-content">
+            <div class="card">
+                <h2>GitHub Settings</h2>
+
+                <div class="settings-group">
+                    <label for="githubToken">GitHub Personal Access Token *</label>
+                    <input type="password" id="githubToken" placeholder="ghp_...">
+                    <small>Generate at: <a href="https://github.com/settings/tokens" target="_blank">github.com/settings/tokens</a></small>
+                </div>
+
+                <div class="settings-group">
+                    <label for="githubOwner">Repository Owner (Username) *</label>
+                    <input type="text" id="githubOwner" placeholder="your-username">
+                </div>
+
+                <div class="settings-group">
+                    <label for="githubRepo">Repository Name *</label>
+                    <input type="text" id="githubRepo" placeholder="my-file-storage">
+                </div>
+
+                <div class="settings-group">
+                    <label for="githubBranch">Branch</label>
+                    <input type="text" id="githubBranch" placeholder="main" value="main">
+                </div>
+
+                <div class="info-box">
+                    <h4>📝 How to Generate a Personal Access Token:</h4>
+                    <ol>
+                        <li>Go to <a href="https://github.com/settings/tokens" target="_blank">GitHub Settings → Tokens</a></li>
+                        <li>Click "Generate new token (classic)"</li>
+                        <li>Give it a name like "File System Upload"</li>
+                        <li>Check the <strong>repo</strong> scope</li>
+                        <li>Copy the token (you won't see it again!)</li>
+                        <li>Paste it in the field above</li>
+                    </ol>
+                </div>
+
+                <button id="saveSettingsBtn" class="btn btn-success">Save Settings</button>
+                <button id="clearSettingsBtn" class="btn btn-secondary">Clear Settings</button>
+            </div>
+        </section>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
