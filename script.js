@@ -1,14 +1,10 @@
-// GitHub File Storage - OPTIMIZED
-// • Secrets-only configuration
-// • Organized per-file folders
-// • Parallel batch upload/download (5 concurrent)
-// • Auto-combine & decompress
+// GitHub File Storage - WITH FALLBACK
 
 const CONFIG = {
     GITHUB_API: 'https://api.github.com',
-    CHUNK_SIZE: 25 * 1024 * 1024, // 25MB
+    CHUNK_SIZE: 20 * 1024 * 1024,
     MAX_FILE_SIZE: 50 * 1024 * 1024 * 1024,
-    PARALLEL_BATCH: 5, // 5 chunks at once
+    PARALLEL_BATCH: 5,
     ASSETS_FOLDER: 'files',
     DATA_FILE: 'data.json',
 };
@@ -34,12 +30,21 @@ let appState = {
 
 document.addEventListener('DOMContentLoaded', async () => {
     setupEventListeners();
-    await loadFromGitHubSecrets();
+
+    // Try to load from GitHub Actions secrets first
+    await loadFromGitHubActions();
+
+    // If not loaded, try sessionStorage
+    if (!validateSettings()) {
+        loadFromSessionStorage();
+    }
+
+    // Update UI
+    updateSettingsUI();
+
     if (validateSettings()) {
-        addLog('✓ Loaded from GitHub Secrets', 'success');
+        addLog('✓ Settings loaded', 'success');
         loadUploadedFiles();
-    } else {
-        addLog('✗ GitHub Secrets not configured', 'error');
     }
 });
 
@@ -67,29 +72,110 @@ function setupEventListeners() {
 
     document.getElementById('fileInput').addEventListener('change', handleFileSelect);
     document.getElementById('uploadBtn').addEventListener('click', startUpload);
+    document.getElementById('saveSettingsBtn').addEventListener('click', saveSettings);
+    document.getElementById('testSettingsBtn').addEventListener('click', testConnection);
+    document.getElementById('clearSettingsBtn').addEventListener('click', clearSettings);
     document.getElementById('darkModeToggle').addEventListener('click', toggleDarkMode);
     document.getElementById('searchInput').addEventListener('input', filterFiles);
     document.getElementById('categoryFilter').addEventListener('change', filterFiles);
 }
 
-async function loadFromGitHubSecrets() {
+// Try to load from GitHub Actions workflow (if injected)
+async function loadFromGitHubActions() {
     try {
-        if (typeof window.__SECRETS__ !== 'undefined' && window.__SECRETS__.PAT_TOKEN) {
-            appState.settings = {
-                token: window.__SECRETS__.PAT_TOKEN,
-                owner: window.__SECRETS__.REPO_OWNER,
-                repo: window.__SECRETS__.REPO_NAME,
-                branch: window.__SECRETS__.REPO_BRANCH || 'main',
-            };
-            return;
+        if (typeof window.__GITHUB_SECRETS__ !== 'undefined') {
+            const secrets = window.__GITHUB_SECRETS__;
+            if (secrets.PAT_TOKEN && secrets.REPO_OWNER && secrets.REPO_NAME) {
+                appState.settings = {
+                    token: secrets.PAT_TOKEN,
+                    owner: secrets.REPO_OWNER,
+                    repo: secrets.REPO_NAME,
+                    branch: secrets.REPO_BRANCH || 'main',
+                };
+                addLog('✓ Loaded from GitHub Actions', 'success');
+                return true;
+            }
         }
+        return false;
+    } catch (error) {
+        console.log('GitHub Actions load error');
+        return false;
+    }
+}
 
-        const stored = sessionStorage.getItem('__SECRETS__');
-        if (stored) {
-            appState.settings = JSON.parse(stored);
+function loadFromSessionStorage() {
+    try {
+        const saved = sessionStorage.getItem('__SETTINGS__');
+        if (saved) {
+            appState.settings = JSON.parse(saved);
         }
     } catch (error) {
-        console.error('Secrets error:', error.message);
+        console.log('SessionStorage load error');
+    }
+}
+
+function updateSettingsUI() {
+    document.getElementById('patToken').value = appState.settings.token;
+    document.getElementById('repoOwner').value = appState.settings.owner;
+    document.getElementById('repoName').value = appState.settings.repo;
+    document.getElementById('repoBranch').value = appState.settings.branch;
+}
+
+function saveSettings() {
+    appState.settings.token = document.getElementById('patToken').value;
+    appState.settings.owner = document.getElementById('repoOwner').value;
+    appState.settings.repo = document.getElementById('repoName').value;
+    appState.settings.branch = document.getElementById('repoBranch').value;
+
+    if (!validateSettings()) {
+        showStatus('Fill all required fields', 'error');
+        return;
+    }
+
+    sessionStorage.setItem('__SETTINGS__', JSON.stringify(appState.settings));
+    showStatus('Settings saved!', 'success');
+    addLog('✓ Settings saved to browser', 'success');
+}
+
+function clearSettings() {
+    if (!confirm('Clear all settings?')) return;
+
+    appState.settings = { token: '', owner: '', repo: '', branch: 'main' };
+    updateSettingsUI();
+    sessionStorage.removeItem('__SETTINGS__');
+    showStatus('Settings cleared', 'info');
+}
+
+async function testConnection() {
+    if (!validateSettings()) {
+        showStatus('Fill settings first', 'error');
+        return;
+    }
+
+    try {
+        const result = document.getElementById('testResult');
+        result.style.display = 'block';
+        result.innerHTML = 'Testing connection...';
+
+        const response = await fetch(`${CONFIG.GITHUB_API}/user`, {
+            headers: { 'Authorization': `token ${appState.settings.token}` },
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            result.innerHTML = `✓ Connected! Logged in as: <strong>${data.login}</strong>`;
+            result.className = 'info-box success';
+            addLog(`✓ Connected as ${data.login}`, 'success');
+        } else if (response.status === 401) {
+            result.innerHTML = '✗ Invalid token - check GitHub settings';
+            result.className = 'info-box error';
+        } else {
+            result.innerHTML = `✗ Error: HTTP ${response.status}`;
+            result.className = 'info-box error';
+        }
+    } catch (error) {
+        document.getElementById('testResult').innerHTML = `✗ Error: ${error.message}`;
+        document.getElementById('testResult').className = 'info-box error';
     }
 }
 
@@ -142,7 +228,8 @@ async function startUpload() {
     if (appState.isUploading || !appState.selectedFile) return;
 
     if (!validateSettings()) {
-        showStatus('Configure GitHub Secrets', 'error');
+        showStatus('Configure settings first', 'error');
+        switchTab('settings');
         return;
     }
 
@@ -160,13 +247,13 @@ async function startUpload() {
         addLog(`✓ ${formatBytes(compressed.size)}`, 'success');
 
         const fileFolder = `${CONFIG.ASSETS_FOLDER}/${appState.selectedFile.name.replace(/[/\?*:|"<>]/g, '_')}`;
-        addLog(`Using folder: ${fileFolder}`, 'info');
+        addLog(`Folder: ${fileFolder}`, 'info');
 
         addLog('Chunking...', 'info');
         const chunks = createChunks(compressed);
         addLog(`✓ ${chunks.length} chunks`, 'success');
 
-        addLog('Uploading in batches...', 'info');
+        addLog('Uploading in parallel batches...', 'info');
         await uploadChunksParallel(chunks, fileFolder);
 
         addLog('Saving metadata...', 'info');
@@ -229,8 +316,6 @@ async function uploadChunksParallel(chunks, fileFolder) {
         const batch = chunks.slice(i, Math.min(i + CONFIG.PARALLEL_BATCH, total));
         const batchNum = Math.floor(i / CONFIG.PARALLEL_BATCH) + 1;
         const totalBatches = Math.ceil(total / CONFIG.PARALLEL_BATCH);
-
-        addLog(`Batch ${batchNum}/${totalBatches} (${batch.length} chunks)...`, 'info');
 
         await Promise.all(
             batch.map((chunk, idx) => 
@@ -367,7 +452,7 @@ async function loadUploadedFiles() {
     if (!list) return;
 
     if (!validateSettings()) {
-        list.innerHTML = '<p class="empty-state">Configure GitHub Secrets</p>';
+        list.innerHTML = '<p class="empty-state">Configure settings in Settings tab</p>';
         return;
     }
 
@@ -386,7 +471,7 @@ async function loadUploadedFiles() {
         });
         filterFiles();
     } catch (error) {
-        list.innerHTML = '<p class="empty-state">Error</p>';
+        list.innerHTML = '<p class="empty-state">Error loading files</p>';
     }
 }
 
@@ -435,7 +520,6 @@ async function downloadFile(fileName, folderPath, chunkCount) {
         addLog(`Downloading: ${fileName}...`, 'info');
         const chunks = [];
 
-        // Download in parallel batches
         for (let i = 0; i < chunkCount; i += CONFIG.PARALLEL_BATCH) {
             const batch = Array.from(
                 { length: Math.min(CONFIG.PARALLEL_BATCH, chunkCount - i) },
@@ -510,10 +594,8 @@ async function deleteFile(fileName, folderPath) {
     if (!confirm(`Delete ${fileName}?`)) return;
 
     try {
-        // Delete metadata
         await deleteGitHubFile(`${folderPath}/metadata.json`);
 
-        // Get all chunks
         const entry = appState.dataJson.files.find(f => f.name === fileName);
         for (let i = 1; i <= entry.chunkCount; i++) {
             const chunkName = `chunk_${String(i).padStart(5, '0')}.gz`;
@@ -521,7 +603,7 @@ async function deleteFile(fileName, folderPath) {
         }
 
         appState.dataJson.files = appState.dataJson.files.filter(f => f.name !== fileName);
-        await updateRegistry('', 0, 0, 0, ''); // This will just update the registry
+        await updateRegistry('', 0, 0, 0, '');
 
         showStatus('Deleted!', 'success');
         loadUploadedFiles();

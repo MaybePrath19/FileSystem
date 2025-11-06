@@ -19,6 +19,7 @@
             <button class="tab-btn active" data-tab="upload">Upload</button>
             <button class="tab-btn" data-tab="files">Files</button>
             <button class="tab-btn" data-tab="stats">Stats</button>
+            <button class="tab-btn" data-tab="settings">Settings</button>
         </nav>
 
         <!-- UPLOAD TAB -->
@@ -65,7 +66,6 @@
                         </div>
                         <span id="uploadText" class="progress-text">0%</span>
                     </div>
-                    <div id="chunkProgress" class="chunk-progress"></div>
                 </div>
 
                 <div id="uploadLog" class="log-section" style="display: none;">
@@ -123,6 +123,40 @@
                         <p>No files uploaded</p>
                     </div>
                 </div>
+            </div>
+        </section>
+
+        <!-- SETTINGS TAB -->
+        <section id="settings" class="tab-content">
+            <div class="card">
+                <h2>GitHub Configuration</h2>
+
+                <div class="settings-group">
+                    <label for="patToken">GitHub Personal Access Token *</label>
+                    <input type="password" id="patToken" placeholder="ghp_...">
+                    <small>Generate at: <a href="https://github.com/settings/tokens" target="_blank">github.com/settings/tokens</a></small>
+                </div>
+
+                <div class="settings-group">
+                    <label for="repoOwner">Repository Owner (Username) *</label>
+                    <input type="text" id="repoOwner" placeholder="MaybePrath19">
+                </div>
+
+                <div class="settings-group">
+                    <label for="repoName">Repository Name *</label>
+                    <input type="text" id="repoName" placeholder="FileSystem">
+                </div>
+
+                <div class="settings-group">
+                    <label for="repoBranch">Branch</label>
+                    <input type="text" id="repoBranch" placeholder="main" value="main">
+                </div>
+
+                <button id="saveSettingsBtn" class="btn btn-success">Save Settings</button>
+                <button id="testSettingsBtn" class="btn btn-secondary">Test Connection</button>
+                <button id="clearSettingsBtn" class="btn btn-secondary">Clear Settings</button>
+
+                <div id="testResult" class="info-box" style="display: none; margin-top: 20px;"></div>
             </div>
         </section>
     </div>
